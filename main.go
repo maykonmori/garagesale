@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"log"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/maykonmori1993/garagesale/schema"
 )
 
 func main() {
@@ -30,6 +32,23 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+
+	flag.Parse()
+	switch flag.Arg(0) {
+	case "migrate":
+		if err := schema.Migrate(db); err != nil {
+			log.Println("error applying migrations", err)
+		}
+		log.Println("Migrations complete")
+		return
+
+	case "seed":
+		if err := schema.Seed(db); err != nil {
+			log.Println("error seeding database", err)
+		}
+		log.Println("Seed data complete")
+		return
+	}
 
 	// ============================================================
 	// Start API Service
@@ -51,15 +70,12 @@ func main() {
 		serverErrors <- api.ListenAndServe()
 	}()
 
-	// Make a channel to listen for an interrupt or terminate signal from the OS.
-	// Use a buffered channel because the signal package requires it.
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	// =========================================================================
 	// Shutdown
 
-	// Blocking main and waiting for shutdown.
 	select {
 	case err := <-serverErrors:
 		log.Fatalf("error: listening and serving: %s", err)
@@ -67,12 +83,10 @@ func main() {
 	case <-shutdown:
 		log.Println("main : Start shutdown")
 
-		// Give outstanding requests a deadline for completion.
 		const timeout = 5 * time.Second
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
-		// Asking listener to shutdown and load shed.
 		err := api.Shutdown(ctx)
 		if err != nil {
 			log.Printf("main : Graceful shutdown did not complete in %v : %v", timeout, err)
