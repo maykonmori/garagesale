@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,7 +23,7 @@ func main() {
 
 	api := http.Server{
 		Addr:         "localhost:8000",
-		Handler:      http.HandlerFunc(Echo),
+		Handler:      http.HandlerFunc(ListProducts),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
 	}
@@ -75,19 +74,29 @@ func main() {
 
 }
 
-// Echo is a basic HTTP Handler.
-// If you open localhost:8000 in your browser, you may notice
-// double requets being made. This happens because the browser
-// sends a request in the background for a website favicon.
-func Echo(w http.ResponseWriter, r *http.Request) {
+type Product struct {
+	Name     string `json:"name"`
+	Cost     int    `json:"cost"`
+	Quantity int    `json:"quantity"`
+}
 
-	// Print a random number at the beginning and end of each request.
-	n := rand.Intn(1000)
-	log.Println("start", n)
-	defer log.Println("end", n)
+func ListProducts(w http.ResponseWriter, r *http.Request) {
 
-	// Simulate a long-running request.
-	time.Sleep(3 * time.Second)
+	list := []Product{
+		{Name: "Comic Books", Cost: 50, Quantity: 42},
+		{Name: "McDonalds Toys", Cost: 75, Quantity: 120},
+	}
 
-	fmt.Fprintf(w, "You asked to %s %s\n", r.Method, r.URL.Path)
+	data, err := json.Marshal(list)
+	if err != nil {
+		log.Println("error marshalling result", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(data); err != nil {
+		log.Println("error writing result", err)
+	}
 }
