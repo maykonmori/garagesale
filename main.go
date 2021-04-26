@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -17,6 +21,15 @@ func main() {
 
 	log.Printf("main : Started")
 	defer log.Println("main : Completed")
+
+	// ============================================================
+	// Start Database
+
+	db, err := openDB()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
 	// ============================================================
 	// Start API Service
@@ -72,6 +85,22 @@ func main() {
 
 	}
 
+}
+
+func openDB() (*sqlx.DB, error) {
+	q := url.Values{}
+	q.Set("sslmode", "disable")
+	q.Set("timezone", "utc")
+
+	u := url.URL{
+		Scheme:  "postgres",
+		User:    url.UserPassword("postgres", "postgres"),
+		Host:    "localhost",
+		Path:    "postgres",
+		RawPath: q.Encode(),
+	}
+
+	return sqlx.Open("postgres", u.String())
 }
 
 type Product struct {
